@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="../style.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
+        <title>Rehabilitative Swallowing</title>
+    </head>
+    <body>
+
+      <h1>log-in page</h1>
+
+    <!-- SUPABASE LOGIN -->
+    <div class="form">
+      <input id="email" class="input" placeholder="email" /><br>
+      <input id="password" class="input" type="password" placeholder="password" /><br>
+      <button id="login" class="button log-in">log in</button>
+      <!-- <button id="logout" class="button log-in">log out</button> -->
+    </div>
+    <!-- <button id="load">Load sessions</button> -->
+    <pre id="out"></pre>
+
+    <script type="module">
+      import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+      // note: keep RLS enabled since these are public
+      const SUPABASE_URL = "https://ehwsobpiwlpweujozwbo.supabase.co/";
+      const SUPABASE_ANON_KEY = "sb_publishable_SJkaqdhH9vWzai4fGvDDYA_AigoNqni";
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      const out = document.getElementById("out");
+
+      document.getElementById("login").onclick = async () => {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        out.textContent = error ? error.message : "Logged in";
+      };
+
+      document.getElementById("logout").onclick = async () => {
+        await supabase.auth.signOut();
+        out.textContent = "Logged out";
+      };
+
+    //   document.getElementById("load").onclick = async () => {
+    //     const { data, error } = await supabase
+    //       .from("emg_sessions")
+    //       .select("id, created_at, title")
+    //       .order("created_at", { ascending: false })
+    //       .limit(10);
+
+    //     out.textContent = error ? error.message : JSON.stringify(data, null, 2);
+    //   };
+    </script>
+
+    <hr>
+    <p>back to <a href="./index.html" class="link">home</a></p>
+    </body>
+</html>
