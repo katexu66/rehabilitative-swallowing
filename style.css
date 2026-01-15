@@ -1,8 +1,17 @@
+html {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 body {
     text-align: center;
-    font-family: "Roboto Mono", monospace;
-    font-optical-sizing: auto;
-    font-weight: 400; /*boldness, 100-700*/
     position: absolute; /*centering*/
     top: 40%;
     left: 50%;
@@ -13,7 +22,7 @@ body {
     width: 100%; */
 }
 p {
-    font-size: 12px;
+    font-size: 15px;
 }
 a {
     color: black;
