@@ -10,51 +10,72 @@
     </head>
     <body>
 
-      <h1>log-in page</h1>
+      <h1>login page</h1>
 
     <!-- SUPABASE LOGIN -->
     <div class="form">
-      <input id="email" class="input" placeholder="email" /><br>
-      <input id="password" class="input" type="password" placeholder="password" /><br>
-      <button id="login" class="button log-in">log in</button>
-      <!-- <button id="logout" class="button log-in">log out</button> -->
-    </div>
-    <!-- <button id="load">Load sessions</button> -->
-    <pre id="out"></pre>
+  <input id="email" class="input" placeholder="email" />
+  <br>
+  <input id="password" class="input" type="password" placeholder="password" />
+  <br>
+  <button id="login" class="button log-in">log in</button>
+  <button id="logout" class="button log-in" hidden>log out</button>
+</div>
 
-    <script type="module">
-      import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+<pre id="out"></pre>
 
-      // note: keep RLS enabled since these are public
-      const SUPABASE_URL = "https://ehwsobpiwlpweujozwbo.supabase.co/";
-      const SUPABASE_ANON_KEY = "sb_publishable_SJkaqdhH9vWzai4fGvDDYA_AigoNqni";
+<script type="module">
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const SUPABASE_URL = "https://ehwsobpiwlpweujozwbo.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_SJkaqdhH9vWzai4fGvDDYA_AigoNqni";
 
-      const out = document.getElementById("out");
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      document.getElementById("login").onclick = async () => {
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        out.textContent = error ? error.message : "Logged in";
-      };
+  const out = document.getElementById("out");
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const loginBtn = document.getElementById("login");
+  const logoutBtn = document.getElementById("logout");
 
-      document.getElementById("logout").onclick = async () => {
-        await supabase.auth.signOut();
-        out.textContent = "Logged out";
-      };
+  // ---- AUTH STATE HANDLER ----
+  const updateUI = (session) => {
+    const loggedIn = !!session;
 
-    //   document.getElementById("load").onclick = async () => {
-    //     const { data, error } = await supabase
-    //       .from("emg_sessions")
-    //       .select("id, created_at, title")
-    //       .order("created_at", { ascending: false })
-    //       .limit(10);
+    emailInput.hidden = loggedIn;
+    passwordInput.hidden = loggedIn;
+    loginBtn.hidden = loggedIn;
+    logoutBtn.hidden = !loggedIn;
 
-    //     out.textContent = error ? error.message : JSON.stringify(data, null, 2);
-    //   };
-    </script>
+    out.textContent = loggedIn ? "Logged in" : "Logged out";
+  };
+
+  const { data: { session } } = await supabase.auth.getSession();
+  updateUI(session);
+
+  // Runs on load + any auth change
+  supabase.auth.onAuthStateChange((_event, session) => {
+    updateUI(session);
+  });
+
+  // ---- LOGIN ----
+  loginBtn.onclick = async () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) out.textContent = error.message;
+  };
+
+  // ---- LOGOUT ----
+  logoutBtn.onclick = async () => {
+    await supabase.auth.signOut();
+  };
+</script>
 
     <hr>
     <p>back to <a href="./index.html" class="link">home</a></p>
