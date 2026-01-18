@@ -1,7 +1,8 @@
 # In terminal: run `python -m pip install brainflow`
+# python -m pip install brainflow pyqtgraph pyqt5 numpy
 
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
-from brainflow.data_filter import DataFilter, FilterTypes, AggOperations, DetrendOperations
+from brainflow.data_filter import DataFilter, FilterTypes, DetrendOperations
 import pyqtgraph as pg
 
 import time
