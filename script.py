@@ -37,7 +37,6 @@ def main():
         # data = board.get_current_board_data(256) # get latest 256 packages or less, doesnt remove them from internal buffer
         data = board.get_board_data()  # get all data acquired since stream started and remove it from internal buffer
         print(f"Acquired {data.shape[1]} samples")
-        processing(data, fs)
 
         # Optional: Print raw EEG data from the first channel
         eeg_channels = BoardShim.get_eeg_channels(board_id)
@@ -53,23 +52,6 @@ def main():
             board.stop_stream()
             board.release_session()
             print("Session released.")
-
-def processing(data, fs):
-    DataFilter.detrend(data, DetrendOperations.LINEAR.value)
-    DataFilter.perform_bandpass(
-        data, fs,
-        20.0, 250.0,      # EMG band
-        4,                # order
-        FilterTypes.BUTTERWORTH.value,
-        0
-    )
-    DataFilter.perform_notch(
-        data, fs,
-        60.0, 2.0,        # powerline
-        4,
-        FilterTypes.BUTTERWORTH.value,
-        0
-    )
 
 if __name__ == "__main__":
     main()
