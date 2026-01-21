@@ -7,18 +7,101 @@
     </head>
     <body>
         <h1>throat workout 🏋️</h1>
-        <br>
 
     <button class="button">raw data</button>
     <button class="button">summary view</button>
     <button class="button">game</button>
     <br>
-    <a class="button special" href="./login.html">log in to view data</a>
+    <button id="btn-stream" class="button special">start stream</button>
+    <button id="btn-stopstream" class="button special">stop stream</button>
+    <!-- <a class="button special" href="./login.html">log in to view data</a> -->
     </p>
+
+    <!-- container for plot -->
+    <canvas id="plot" width="900" height="300" style="border:1px solid #ddd; max-width: 100%;"></canvas>
+    <div id="status" style="margin-top:8px; font-family: system-ui;">Status: disconnected</div>
 
     <br>
     <div id="footer"><hr>
     <p>MIT</p></div>
 
+    <!-- script to connect to app -->
+    <script>
+      const btnStream = document.getElementById("btn-stream");
+      const btnStopStream = document.getElementById("btn-stopstream");
+      const statusEl = document.getElementById("status");
+      const canvas = document.getElementById("plot");
+      const ctx = canvas.getContext("2d");
+
+      let ws = null;
+      let fs = 200;
+      let nCh = 4;
+
+      // simple ring buffer for channel 0
+      const seconds = 5;
+      let buf = [];
+      let maxLen = seconds * fs;
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (buf.length < 2) return;
+
+        // autoscale
+        let min = Infinity, max = -Infinity;
+        for (const v of buf) { if (v < min) min = v; if (v > max) max = v; }
+        if (min === max) { min -= 1; max += 1; }
+
+        const w = canvas.width, h = canvas.height;
+        ctx.beginPath();
+        for (let i = 0; i < buf.length; i++) {
+          const x = (i / (buf.length - 1)) * w;
+          const y = h - ((buf[i] - min) / (max - min)) * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      function connect() {
+        const wsProto = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+        // ws = new WebSocket("ws://127.0.0.1:8000/ws"); // hard coded this
+        statusEl.textContent = "Status: connecting...";
+
+        ws.onopen = () => statusEl.textContent = "Status: connected";
+        ws.onclose = () => statusEl.textContent = "Status: disconnected";
+        ws.onerror = () => statusEl.textContent = "Status: error";
+
+        ws.onmessage = (ev) => {
+          const msg = JSON.parse(ev.data);
+
+          if (msg.type === "meta") {
+            fs = msg.fs;
+            nCh = msg.channels;
+            maxLen = seconds * fs;
+            buf = [];
+            return;
+          }
+
+          if (msg.type === "data") {
+            // msg.y is CHUNK_SAMPLES x nCh
+            // use channel 0 for minimal test
+            for (const row of msg.y) {
+              buf.push(row[0]);
+            }
+            if (buf.length > maxLen) buf = buf.slice(buf.length - maxLen);
+            draw();
+          }
+        };
+      }
+
+      btnStream.onclick = () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) connect();
+      };
+      btnStopStream.onclick = () => {
+        if (ws.readyState == WebSocket.OPEN) ws.close();
+      }
+    </script>
     </body>
 </html>

@@ -1,5 +1,7 @@
 # In terminal: run `python -m pip install brainflow`
 # python -m pip install brainflow pyqtgraph pyqt5 numpy
+# python -m pip install fastapi uvicorn
+# python -m pip install websockets
 
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 from brainflow.data_filter import DataFilter, FilterTypes, DetrendOperations
