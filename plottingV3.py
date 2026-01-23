@@ -13,7 +13,7 @@ def main():
 
     board_id = BoardIds.GANGLION_BOARD.value
     params = BrainFlowInputParams()
-    params.serial_port = "COM8"     # for Windows with BLE dongle; COM varies depending on port, usually COM8 for Abi, COM5 for Kate
+    params.serial_port = "COM4"     # for Windows with BLE dongle; COM varies depending on port, usually COM8 for Abi, COM5 for Kate
     # params.mac_address = "XX:XX:XX:XX:XX"  # for MAC; should auto look for it if you don't set though (TEST THIS)
 
     board = BoardShim(board_id, params)
@@ -84,7 +84,7 @@ def main():
             window_sz = 10 # duration of window for rolling filter in ms
             DataFilter.perform_rolling_filter(y_rect, period=(50), operation=AggOperations.MEAN.value); # creates a moving average
             y_env = y_rect # signal envelope
-            
+
             env_buffers[i][:] = y_env
             env_curves[i].setData(x, env_buffers[i])
 

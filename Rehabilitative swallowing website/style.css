@@ -11,15 +11,9 @@ textarea {
 }
 
 body {
-    text-align: center;
-    position: absolute; /*centering*/
-    top: 40%;
-    left: 50%;
-    -ms-transform: translate(-50%, -50%);
-    transform: translate(-50%, -50%);
+    margin: auto; /* centering */
     width: 50%;
-    /* top: 20%;
-    width: 100%; */
+    text-align: center;
 }
 p {
     font-size: 15px;

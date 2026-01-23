@@ -8,14 +8,15 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
-from brainflow.data_filter import DataFilter, FilterTypes, DetrendOperations, NoiseTypes, AggOperations
+from brainflow.data_filter import DataFilter, DetrendOperations, NoiseTypes
 
-# PARAMETERS
-BOARD_ID = BoardIds.GANGLION_BOARD.value
+# --------- CONFIG ---------- # replace with actual board things
+BOARD_ID = BoardIds.SYNTHETIC_BOARD.value
 WINDOW_SECONDS = 5          # for client display (client can choose too)
 CHUNK_SAMPLES = 20          # samples per websocket message (smaller = lower latency)
 SEND_INTERVAL_MS = 50       # how often to send (pacing)
-PORT = "COM4"
+USE_FILTERS = False         # keep False for the absolute minimal test
+# ---------------------------
 
 app = FastAPI()
 
@@ -26,13 +27,12 @@ app.mount("/static", StaticFiles(directory=str(SITE_DIR)), name="static")
 def init_board():
     BoardShim.enable_dev_board_logger()
     params = BrainFlowInputParams()
-    params.serial_port = PORT
     board = BoardShim(BOARD_ID, params)
 
     fs = BoardShim.get_sampling_rate(BOARD_ID)
-    channels = BoardShim.get_emg_channels(BOARD_ID)
-    if not channels: # if emg_channels is empty use exg channels
-        channels = BoardShim.get_exg_channels(BOARD_ID)
+    channels = BoardShim.get_exg_channels(BOARD_ID)
+    if not channels:
+        channels = BoardShim.get_eeg_channels(BOARD_ID)
 
     board.prepare_session()
     board.start_stream(45000)
@@ -46,8 +46,10 @@ print("BOARD INIT OK")
 
 @app.get("/")
 def root():
+    # Serve your existing index.html
     html = (SITE_DIR / "index.html").read_text(encoding="utf-8")
-    # html = html.replace('href="./style.css"', 'href="/static/style.css"') # do I need to do this for login.html too?
+    # Fix paths: your HTML uses ./style.css, but we serve static under /static
+    html = html.replace('href="./style.css"', 'href="/static/style.css"')
     return HTMLResponse(html)
 
 
@@ -58,32 +60,23 @@ async def ws(websocket: WebSocket):
     n_channels = len(channels)
     await websocket.send_text(json.dumps({"type": "meta", "fs": fs, "channels": n_channels}))
 
-    roll_period = max(1, int(0.05 * fs))  # 50 ms window in samples
-
     # Continuous stream: always send the latest CHUNK_SAMPLES per channel
     try:
         while True:
             data = board.get_current_board_data(CHUNK_SAMPLES)  # shape: (rows, CHUNK_SAMPLES)
 
-            raw = np.stack([data[ch, :] for ch in channels], axis=1).astype(np.float64, copy=True)  # (chunk, C)
+            # Extract channels -> (CHUNK_SAMPLES, n_channels)
+            Y = np.stack([data[ch, :] for ch in channels], axis=1).astype(np.float64, copy=True)
 
-            # Process per channel (from plottingV3.py)
-            env = np.empty_like(raw)
-            for ci in range(raw.shape[1]):
-                y = raw[:, ci].copy()
+            if USE_FILTERS:
+                # minimal, safe preprocessing (optional)
+                for ci in range(n_channels):
+                    y = Y[:, ci]
+                    DataFilter.detrend(y, DetrendOperations.CONSTANT.value)
+                    DataFilter.remove_environmental_noise(y, fs, NoiseTypes.SIXTY.value)
 
-                DataFilter.detrend(y, DetrendOperations.CONSTANT.value)
-                DataFilter.remove_environmental_noise(y, fs, NoiseTypes.SIXTY.value)
-                DataFilter.perform_bandpass(y, fs, 40.0, min(100.0, fs/2 - 1.0), 4, FilterTypes.BUTTERWORTH.value, 0)
-
-                raw[:, ci] = y
-                y_rect = np.abs(y)
-                DataFilter.perform_rolling_filter(y_rect, roll_period, AggOperations.MEAN.value)
-                env[:, ci] = y_rect
-
-            # await websocket.send_text(json.dumps({"type": "data", "y": y.tolist()}))
-            # send both raw and envelope
-            await websocket.send_text(json.dumps({"type": "data", "raw": raw.tolist(), "env": env.tolist()}))
+            # Send row-major samples
+            await websocket.send_text(json.dumps({"type": "data", "y": Y.tolist()}))
             await asyncio.sleep(SEND_INTERVAL_MS / 1000.0)
 
     except Exception:
@@ -94,6 +87,7 @@ async def ws(websocket: WebSocket):
 # print("Loaded routes:")
 # for r in app.router.routes:
 #     print(type(r).__name__, getattr(r, "path", None))
+
 
 @app.websocket("/ws_test")
 async def ws_test(websocket: WebSocket):

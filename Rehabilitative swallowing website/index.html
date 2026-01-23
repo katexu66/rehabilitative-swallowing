@@ -2,13 +2,14 @@
 <html>
     <head>
         <meta charset="utf-8" />
-        <link rel="stylesheet" href="./style.css" />
+        <link rel="stylesheet" href="./static/style.css" /> <!-- static url -->
         <title>Rehabilitative Swallowing</title>
     </head>
     <body>
         <h1>throat workout 🏋️</h1>
 
-    <button class="button">raw data</button>
+    <!-- <button id="btn-raw" class="button">raw data</button>
+    <button id="btn-env" class="button">envelope</button> -->
     <button class="button">summary view</button>
     <button class="button">game</button>
     <br>
@@ -18,7 +19,10 @@
     </p>
 
     <!-- container for plot -->
-    <canvas id="plot" width="900" height="300" style="border:1px solid #ddd; max-width: 100%;"></canvas>
+    <p>Raw data</p>
+    <canvas id="plot-raw" width="900" height="350" style="border:1px solid #ddd; max-width: 100%;"></canvas>
+    <p>Envelope</p>
+    <canvas id="plot-env" width="900" height="350" style="border:1px solid #ddd; max-width: 100%;"></canvas>
     <div id="status" style="margin-top:8px; font-family: system-ui;">Status: disconnected</div>
 
     <br>
@@ -30,8 +34,10 @@
       const btnStream = document.getElementById("btn-stream");
       const btnStopStream = document.getElementById("btn-stopstream");
       const statusEl = document.getElementById("status");
-      const canvas = document.getElementById("plot");
-      const ctx = canvas.getContext("2d");
+      const canvas_raw = document.getElementById("plot-raw");
+      const ctx_raw = canvas_raw.getContext("2d");
+      const canvas_env = document.getElementById("plot-env");
+      const ctx_env = canvas_env.getContext("2d");
 
       let ws = null;
       let fs = 200;
@@ -39,10 +45,11 @@
 
       // simple ring buffer for channel 0
       const seconds = 5;
-      let buf = [];
+      let buf_raw = [];
+      let buf_env = [];
       let maxLen = seconds * fs;
 
-      function draw() {
+      function draw(buf, ctx, canvas) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (buf.length < 2) return;
@@ -85,13 +92,14 @@
           }
 
           if (msg.type === "data") {
-            // msg.y is CHUNK_SAMPLES x nCh
-            // use channel 0 for minimal test
-            for (const row of msg.y) {
-              buf.push(row[0]);
-            }
-            if (buf.length > maxLen) buf = buf.slice(buf.length - maxLen);
-            draw();
+            for (const row of msg.raw) buf_raw.push(row[0]);
+            for (const row of msg.env) buf_env.push(row[0]);
+
+            if (buf_raw.length > maxLen) buf_raw = buf_raw.slice(-maxLen);
+            if (buf_env.length > maxLen) buf_env = buf_env.slice(-maxLen);
+
+            draw(buf_raw, ctx_raw, canvas_raw);
+            draw(buf_env, ctx_env, canvas_env);
           }
         };
       }
@@ -100,8 +108,15 @@
         if (!ws || ws.readyState !== WebSocket.OPEN) connect();
       };
       btnStopStream.onclick = () => {
-        if (ws.readyState == WebSocket.OPEN) ws.close();
+        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
       }
+
+    //   document.getElementById("btn-raw").onclick = () => {
+    //     mode = "raw";
+    //   };
+    //   document.getElementById("btn-env").onclick = () => {
+    //     mode = "env";
+    //   };
     </script>
     </body>
 </html>
