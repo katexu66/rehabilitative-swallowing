@@ -16,7 +16,10 @@
     <button id="btn-stream" class="button special">start stream</button>
     <button id="btn-stopstream" class="button special">stop stream</button>
     <!-- <a class="button special" href="./login.html">log in to view data</a> -->
-    </p>
+    <div id="timer" style="display: none">Stream started! Time elapsed: <span id="time"></span></div>
+    <div id="finished" style="display: none">Session recorded! Time elapsed: <span id="finishedtime"></span>. Would you like to save this session?
+        <button>yes</button> <button>no</button>
+    </div>
 
     <!-- container for plot -->
     <p>Raw data</p>
@@ -80,6 +83,9 @@
         ws.onclose = () => statusEl.textContent = "Status: disconnected";
         ws.onerror = () => statusEl.textContent = "Status: error";
 
+        document.getElementById("timer").style.display = 'block';
+        starttimer();
+
         ws.onmessage = (ev) => {
           const msg = JSON.parse(ev.data);
 
@@ -105,18 +111,58 @@
       }
 
       btnStream.onclick = () => {
+        document.getElementById("finished").style.display = 'none';
         if (!ws || ws.readyState !== WebSocket.OPEN) connect();
       };
       btnStopStream.onclick = () => {
-        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            document.getElementById("timer").style.display = 'none';
+            stoptimer();
+            document.getElementById("finished").style.display = 'block';
+            ws.close();
+        }
       }
 
-    //   document.getElementById("btn-raw").onclick = () => {
-    //     mode = "raw";
-    //   };
-    //   document.getElementById("btn-env").onclick = () => {
-    //     mode = "env";
-    //   };
     </script>
+
+    <!-- script for timer -->
+    <script>
+
+        var secondsElapsed = 0;
+        var minutes = 0;
+        var timer;
+
+        function tick() {
+            secondsElapsed++;
+            timeElapsed = minutes + ":0" + secondsElapsed;
+
+            if (secondsElapsed > 9) {
+                if (secondsElapsed % 60 == 0) {
+                    secondsElapsed = 0;
+                    minutes ++;
+                    timeElapsed = minutes + ":00";
+                }
+                else {
+                    timeElapsed = minutes + ":" + secondsElapsed;
+                }
+            }
+
+            document.getElementById("time").innerText = timeElapsed;
+        }
+
+        function starttimer() {
+            secondsElapsed = 0; // get rid of this if you just want it to "pause" instead of resetting at 0
+            minutes = 0;
+            document.getElementById("time").innerText = "0:00";
+            timer = setInterval(tick, 1000); // call tick() function every 1 second
+        }
+
+        function stoptimer() {
+            document.getElementById("finishedtime").innerText = timeElapsed;
+            clearInterval(timer);
+        }
+
+    </script>
+
     </body>
 </html>
