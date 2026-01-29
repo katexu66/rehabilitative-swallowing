@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 from fastapi import FastAPI, WebSocket
@@ -22,6 +23,9 @@ app = FastAPI()
 SITE_DIR = Path(__file__).parent # in same folder as index.html and style.css
 app.mount("/static", StaticFiles(directory=str(SITE_DIR)), name="static")
 
+# directory to save data to
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
 
 def init_board():
     BoardShim.enable_dev_board_logger()
@@ -43,7 +47,6 @@ def init_board():
 board, fs, channels = init_board()
 print("BOARD INIT OK")
 
-
 @app.get("/")
 def root():
     html = (SITE_DIR / "index.html").read_text(encoding="utf-8")
@@ -54,6 +57,12 @@ def root():
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
     await websocket.accept()
+
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    raw_path = DATA_DIR / f"raw_{run_id}.npy"
+    env_path = DATA_DIR / f"env_{run_id}.npy"
+
+    raw_log, env_log = [], []
 
     n_channels = len(channels)
     await websocket.send_text(json.dumps({"type": "meta", "fs": fs, "channels": n_channels}))
@@ -81,14 +90,19 @@ async def ws(websocket: WebSocket):
                 DataFilter.perform_rolling_filter(y_rect, roll_period, AggOperations.MEAN.value)
                 env[:, ci] = y_rect
 
+            # store data
+            raw_log.append(raw.copy())
+            env_log.append(env.copy())
+
             # await websocket.send_text(json.dumps({"type": "data", "y": y.tolist()}))
             # send both raw and envelope
             await websocket.send_text(json.dumps({"type": "data", "raw": raw.tolist(), "env": env.tolist()}))
             await asyncio.sleep(SEND_INTERVAL_MS / 1000.0)
 
-    except Exception:
+    finally:
         # client disconnected or server stop
-        pass
+        if raw_log: np.save(raw_path, np.concatenate(raw_log, axis=0))
+        if env_log: np.save(env_path, np.concatenate(env_log, axis=0))
 
 # # Troubleshooting
 # print("Loaded routes:")
@@ -105,6 +119,8 @@ async def ws_test(websocket: WebSocket):
 @app.on_event("shutdown")
 def shutdown_event():
     try:
+        if raw_log: np.save(raw_path, np.concatenate(raw_log, axis=0))
+        if env_log: np.save(env_path, np.concatenate(env_log, axis=0))
         board.stop_stream()
     finally:
         board.release_session()

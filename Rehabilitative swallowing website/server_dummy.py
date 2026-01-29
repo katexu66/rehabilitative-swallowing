@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 from fastapi import FastAPI, WebSocket
@@ -8,14 +9,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
-from brainflow.data_filter import DataFilter, DetrendOperations, NoiseTypes
+from brainflow.data_filter import DataFilter, FilterTypes, DetrendOperations, NoiseTypes, AggOperations
 
 # --------- CONFIG ---------- # replace with actual board things
 BOARD_ID = BoardIds.SYNTHETIC_BOARD.value
 WINDOW_SECONDS = 5          # for client display (client can choose too)
 CHUNK_SAMPLES = 20          # samples per websocket message (smaller = lower latency)
 SEND_INTERVAL_MS = 50       # how often to send (pacing)
-USE_FILTERS = False         # keep False for the absolute minimal test
 # ---------------------------
 
 app = FastAPI()
@@ -23,6 +23,9 @@ app = FastAPI()
 SITE_DIR = Path(__file__).parent # in same folder as index.html and style.css
 app.mount("/static", StaticFiles(directory=str(SITE_DIR)), name="static")
 
+# directory to save data to
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
 
 def init_board():
     BoardShim.enable_dev_board_logger()
@@ -43,7 +46,6 @@ def init_board():
 board, fs, channels = init_board()
 print("BOARD INIT OK")
 
-
 @app.get("/")
 def root():
     # Serve your existing index.html
@@ -57,31 +59,48 @@ def root():
 async def ws(websocket: WebSocket):
     await websocket.accept()
 
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    raw_path = DATA_DIR / f"raw_{run_id}.npy"
+    env_path = DATA_DIR / f"env_{run_id}.npy"
+
+    raw_log, env_log = [], []
+
     n_channels = len(channels)
     await websocket.send_text(json.dumps({"type": "meta", "fs": fs, "channels": n_channels}))
+    roll_period = max(1, int(0.05 * fs))  # 50 ms window in samples
 
     # Continuous stream: always send the latest CHUNK_SAMPLES per channel
     try:
         while True:
             data = board.get_current_board_data(CHUNK_SAMPLES)  # shape: (rows, CHUNK_SAMPLES)
 
-            # Extract channels -> (CHUNK_SAMPLES, n_channels)
-            Y = np.stack([data[ch, :] for ch in channels], axis=1).astype(np.float64, copy=True)
+            raw = np.stack([data[ch, :] for ch in channels], axis=1).astype(np.float64, copy=True)  # (chunk, C)
 
-            if USE_FILTERS:
-                # minimal, safe preprocessing (optional)
-                for ci in range(n_channels):
-                    y = Y[:, ci]
-                    DataFilter.detrend(y, DetrendOperations.CONSTANT.value)
-                    DataFilter.remove_environmental_noise(y, fs, NoiseTypes.SIXTY.value)
+            # Process per channel (from plottingV3.py)
+            env = np.empty_like(raw)
+            for ci in range(raw.shape[1]):
+                y = raw[:, ci].copy()
+
+                DataFilter.detrend(y, DetrendOperations.CONSTANT.value)
+                DataFilter.remove_environmental_noise(y, fs, NoiseTypes.SIXTY.value)
+                DataFilter.perform_bandpass(y, fs, 40.0, min(100.0, fs/2 - 1.0), 4, FilterTypes.BUTTERWORTH.value, 0)
+
+                raw[:, ci] = y
+                y_rect = np.abs(y)
+                DataFilter.perform_rolling_filter(y_rect, roll_period, AggOperations.MEAN.value)
+                env[:, ci] = y_rect
+
+            # store data
+            raw_log.append(raw.copy())
+            env_log.append(env.copy())
 
             # Send row-major samples
-            await websocket.send_text(json.dumps({"type": "data", "y": Y.tolist()}))
+            await websocket.send_text(json.dumps({"type": "data", "raw": raw.tolist(), "env": env.tolist()}))
             await asyncio.sleep(SEND_INTERVAL_MS / 1000.0)
-
-    except Exception:
+    finally:
         # client disconnected or server stop
-        pass
+        if raw_log: np.save(raw_path, np.concatenate(raw_log, axis=0))
+        if env_log: np.save(env_path, np.concatenate(env_log, axis=0))
 
 # # Troubleshooting
 # print("Loaded routes:")

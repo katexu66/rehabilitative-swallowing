@@ -93,7 +93,8 @@
             fs = msg.fs;
             nCh = msg.channels;
             maxLen = seconds * fs;
-            buf = [];
+            buf_raw = []; // clear buffers
+            buf_env = [];
             return;
           }
 
