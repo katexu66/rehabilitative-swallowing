@@ -11,9 +11,8 @@
     <a href="/" style="text-decoration: underline;">return to home</a>
     <br>
     <label for="sessions">Select the session you would like to view:</label>
-    <select name="sessions" id="sessions">
-    <option value="volvo">session</option>
-    </select>
+    <select name="sessions" id="sessions"></select>
+    <button id="loadBtn">load</button>
     <hr>
 
     <!-- container for plot -->
@@ -27,8 +26,10 @@
     <div id="footer"><hr>
     <p>MIT</p></div>
 
-    <!-- script to connect to app -->
     <script>
+      const sel = document.getElementById("sessions");
+      const loadBtn = document.getElementById("loadBtn");
+
       const canvas_raw = document.getElementById("plot-raw");
       const ctx_raw = canvas_raw.getContext("2d");
       const canvas_env = document.getElementById("plot-env");
@@ -36,14 +37,6 @@
 
       let ws = null;
       let session_id = null;
-      let fs = 200;
-      let nCh = 4;
-
-      // simple ring buffer for channel 0
-      const seconds = 5;
-      let buf_raw = [];
-      let buf_env = [];
-      let maxLen = seconds * fs;
 
       function draw(buf, ctx, canvas) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -66,50 +59,25 @@
         ctx.stroke();
       }
 
-      function connect() {
-        const wsProto = location.protocol === "https:" ? "wss" : "ws";
-        ws = new WebSocket(`${wsProto}://${location.host}/ws`);
-        // ws = new WebSocket("ws://127.0.0.1:8000/ws"); // hard coded this
-        statusEl.textContent = "Status: connecting...";
-
-        ws.onopen = () => statusEl.textContent = "Status: connected";
-        ws.onclose = () => {
-            statusEl.textContent = "Status: disconnected";
-            document.getElementById("finished").style.display = "block";
-        }
-        ws.onerror = () => statusEl.textContent = "Status: error";
-
-        document.getElementById("timer").style.display = 'block';
-        starttimer();
-
-        session_id = null;
-
-        ws.onmessage = (ev) => {
-          const msg = JSON.parse(ev.data);
-
-          if (msg.type === "meta") {
-            fs = msg.fs;
-            nCh = msg.channels;
-            maxLen = seconds * fs;
-            buf_raw = []; // clear buffers
-            buf_env = [];
-            session_id = msg.session_id;
-            return;
-          }
-
-          if (msg.type === "data") {
-            for (const row of msg.raw) buf_raw.push(row[0]);
-            for (const row of msg.env) buf_env.push(row[0]);
-
-            if (buf_raw.length > maxLen) buf_raw = buf_raw.slice(-maxLen);
-            if (buf_env.length > maxLen) buf_env = buf_env.slice(-maxLen);
-
-            draw(buf_raw, ctx_raw, canvas_raw);
-            draw(buf_env, ctx_env, canvas_env);
-          }
-        };
+      async function refreshList() {
+        const r = await fetch("/sessions");
+        const { sessions } = await r.json();
+        sel.innerHTML = sessions.map(id => `<option value="${id}">${id}</option>`).join("");
       }
 
+      loadBtn.onclick = async () => {
+        const id = sel.value;
+        const r = await fetch(`/session/${id}?decim=5`); // adjust decim
+        const msg = await r.json();
+
+        // msg.raw and msg.env are [ [ch0,ch1,...], ... ] row-major
+        const raw0 = msg.raw.map(row => row[0]); // channel 0
+        const env0 = msg.env.map(row => row[0]);
+        draw(raw0, ctxRaw, canvasRaw);
+        draw(env0, ctxEnv, canvasEnv);
+      };
+
+      refreshList();
     </script>
 
     </body>
