@@ -116,6 +116,33 @@ def discard(session_id: str):
     app.state.pending.pop(session_id, None)
     return {"ok": True}
 
+# previous sessions
+@app.get("/sessions")
+def list_sessions():
+    # returns newest first
+    ids = sorted(
+        [p.stem.replace("raw_", "") for p in DATA_DIR.glob("raw_*.npy")],
+        reverse=True
+    )
+    return {"sessions": ids}
+
+@app.get("/session/{session_id}")
+def load_session(session_id: str, decim: int = 1):
+    raw_path = DATA_DIR / f"raw_{session_id}.npy"
+    env_path = DATA_DIR / f"env_{session_id}.npy"
+    if not raw_path.exists() or not env_path.exists():
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    raw = np.load(raw_path)   # shape (N, C)
+    env = np.load(env_path)
+
+    # optional downsample for faster browser rendering
+    decim = max(1, int(decim))
+    raw = raw[::decim]
+    env = env[::decim]
+
+    return JSONResponse({"session_id": session_id, "raw": raw.tolist(), "env": env.tolist()})
+
 # troubleshooting
 @app.websocket("/ws_test")
 async def ws_test(websocket: WebSocket):
