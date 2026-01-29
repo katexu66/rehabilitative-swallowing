@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta charset="utf-8" />
-        <link rel="stylesheet" href="./static/style.css" /> <!-- static url -->
+        <link rel="stylesheet" href="/static/style.css" /> <!-- static url -->
         <title>Rehabilitative Swallowing</title>
     </head>
     <body>
@@ -12,14 +12,17 @@
     <button id="btn-env" class="button">envelope</button> -->
     <button class="button">stats</button>
     <button class="button">game</button>
-    <a class="button" href="static/login.html">log in to view data</a> <!-- static -->
+    <!-- <a class="button" href="/static/login.html">log in to view data</a> static -->
+    <a class="button" href="/static/data.html">view previous sessions</a> <!-- static -->
     <br>
     <button id="btn-stream" class="button special">start stream</button>
     <button id="btn-stopstream" class="button special">stop stream</button>
     <div id="timer" style="display: none">Stream started! Time elapsed: <span id="time"></span></div>
     <div id="finished" style="display: none">Session recorded! Time elapsed: <span id="finishedtime"></span>. Would you like to save this session?
-        <button>yes</button> <button>no</button>
+        <button id="save">yes</button> <button id="discard">no</button>
     </div>
+    <div id="saveStatus" style="margin-top:6px; font-family: system-ui;"></div>
+    <hr>
 
     <!-- container for plot -->
     <p>Raw data</p>
@@ -36,6 +39,7 @@
     <script>
       const btnStream = document.getElementById("btn-stream");
       const btnStopStream = document.getElementById("btn-stopstream");
+      const saveStatusEl = document.getElementById("saveStatus");
       const statusEl = document.getElementById("status");
       const canvas_raw = document.getElementById("plot-raw");
       const ctx_raw = canvas_raw.getContext("2d");
@@ -43,6 +47,7 @@
       const ctx_env = canvas_env.getContext("2d");
 
       let ws = null;
+      let session_id = null;
       let fs = 200;
       let nCh = 4;
 
@@ -80,11 +85,16 @@
         statusEl.textContent = "Status: connecting...";
 
         ws.onopen = () => statusEl.textContent = "Status: connected";
-        ws.onclose = () => statusEl.textContent = "Status: disconnected";
+        ws.onclose = () => {
+            statusEl.textContent = "Status: disconnected";
+            document.getElementById("finished").style.display = "block";
+        }
         ws.onerror = () => statusEl.textContent = "Status: error";
 
         document.getElementById("timer").style.display = 'block';
         starttimer();
+
+        session_id = null;
 
         ws.onmessage = (ev) => {
           const msg = JSON.parse(ev.data);
@@ -95,6 +105,7 @@
             maxLen = seconds * fs;
             buf_raw = []; // clear buffers
             buf_env = [];
+            session_id = msg.session_id;
             return;
           }
 
@@ -111,7 +122,11 @@
         };
       }
 
+    //   streaming buttons
       btnStream.onclick = () => {
+        saveStatusEl.textContent = "";
+        document.getElementById("save").disabled = false;
+        document.getElementById("discard").disabled = false;
         document.getElementById("finished").style.display = 'none';
         if (!ws || ws.readyState !== WebSocket.OPEN) connect();
       };
@@ -119,9 +134,39 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
             document.getElementById("timer").style.display = 'none';
             stoptimer();
-            document.getElementById("finished").style.display = 'block';
+            // document.getElementById("finished").style.display = 'block';
             ws.close();
         }
+      }
+
+    //   data save buttons
+
+      document.getElementById("save").onclick = () => {
+        if (!session_id) return;
+
+        fetch(`/save/${session_id}`, { method: "POST" })
+            .then(r => r.json())
+            .then(res => {
+                if (res.ok) saveStatusEl.textContent = "Session saved to data folder!";
+                else saveStatusEl.textContent = "Save failed";
+            });
+
+        document.getElementById("save").disabled = true;
+        document.getElementById("discard").disabled = true;
+      }
+      document.getElementById("discard").onclick = () => {
+        if (!session_id) return;
+
+        fetch(`/discard/${session_id}`, { method: "POST" })
+            .then(r => r.json())
+            .then(res => {
+                if (res.ok) saveStatusEl.textContent = "Session discarded";
+                else saveStatusEl.textContent = "Discard failed";
+            });
+
+        document.getElementById("save").disabled = true;
+        document.getElementById("discard").disabled = true;
+
       }
 
     </script>

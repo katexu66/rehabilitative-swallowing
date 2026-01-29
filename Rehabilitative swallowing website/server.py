@@ -4,8 +4,8 @@ from pathlib import Path
 from datetime import datetime
 
 import numpy as np
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
@@ -50,22 +50,21 @@ print("BOARD INIT OK")
 @app.get("/")
 def root():
     html = (SITE_DIR / "index.html").read_text(encoding="utf-8")
-    # html = html.replace('href="./style.css"', 'href="/static/style.css"') # do I need to do this for login.html too?
     return HTMLResponse(html)
 
+app.state.pending = {}
 
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
     await websocket.accept()
 
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    raw_path = DATA_DIR / f"raw_{run_id}.npy"
-    env_path = DATA_DIR / f"env_{run_id}.npy"
+    session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
     raw_log, env_log = [], []
+    app.state.pending[session_id] = (raw_log, env_log)
 
     n_channels = len(channels)
-    await websocket.send_text(json.dumps({"type": "meta", "fs": fs, "channels": n_channels}))
+    await websocket.send_text(json.dumps({"type": "meta", "fs": fs, "channels": n_channels, "session_id": session_id}))
 
     roll_period = max(1, int(0.05 * fs))  # 50 ms window in samples
 
@@ -104,11 +103,21 @@ async def ws(websocket: WebSocket):
         if raw_log: np.save(raw_path, np.concatenate(raw_log, axis=0))
         if env_log: np.save(env_path, np.concatenate(env_log, axis=0))
 
-# # Troubleshooting
-# print("Loaded routes:")
-# for r in app.router.routes:
-#     print(type(r).__name__, getattr(r, "path", None))
+# options for saving/discarding data
 
+@app.post("/save/{session_id}")
+def save(session_id: str):
+    raw_log, env_log = app.state.pending.pop(session_id)
+    np.save(DATA_DIR / f"raw_{session_id}.npy", np.concatenate(raw_log, axis=0))
+    np.save(DATA_DIR / f"env_{session_id}.npy", np.concatenate(env_log, axis=0))
+    return {"ok": True}
+
+@app.post("/discard/{session_id}")
+def discard(session_id: str):
+    app.state.pending.pop(session_id, None)
+    return {"ok": True}
+
+# troubleshooting
 @app.websocket("/ws_test")
 async def ws_test(websocket: WebSocket):
     print("WS_TEST: connect attempt")

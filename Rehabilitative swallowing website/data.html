@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="/static/style.css" /> <!-- static url -->
+        <title>Rehabilitative Swallowing</title>
+    </head>
+    <body>
+        <h1>throat workout 🏋️</h1>
+
+    <a href="/" style="text-decoration: underline;">return to home</a>
+    <br>
+    <label for="sessions">Select the session you would like to view:</label>
+    <select name="sessions" id="sessions">
+    <option value="volvo">session</option>
+    </select>
+    <hr>
+
+    <!-- container for plot -->
+    <p>Raw data</p>
+    <canvas id="plot-raw" width="900" height="350" style="border:1px solid #ddd; max-width: 100%;"></canvas>
+    <p>Envelope</p>
+    <canvas id="plot-env" width="900" height="350" style="border:1px solid #ddd; max-width: 100%;"></canvas>
+    <div id="status" style="margin-top:8px; font-family: system-ui;">Status: disconnected</div>
+
+    <br>
+    <div id="footer"><hr>
+    <p>MIT</p></div>
+
+    <!-- script to connect to app -->
+    <script>
+      const canvas_raw = document.getElementById("plot-raw");
+      const ctx_raw = canvas_raw.getContext("2d");
+      const canvas_env = document.getElementById("plot-env");
+      const ctx_env = canvas_env.getContext("2d");
+
+      let ws = null;
+      let session_id = null;
+      let fs = 200;
+      let nCh = 4;
+
+      // simple ring buffer for channel 0
+      const seconds = 5;
+      let buf_raw = [];
+      let buf_env = [];
+      let maxLen = seconds * fs;
+
+      function draw(buf, ctx, canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (buf.length < 2) return;
+
+        // autoscale
+        let min = Infinity, max = -Infinity;
+        for (const v of buf) { if (v < min) min = v; if (v > max) max = v; }
+        if (min === max) { min -= 1; max += 1; }
+
+        const w = canvas.width, h = canvas.height;
+        ctx.beginPath();
+        for (let i = 0; i < buf.length; i++) {
+          const x = (i / (buf.length - 1)) * w;
+          const y = h - ((buf[i] - min) / (max - min)) * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      function connect() {
+        const wsProto = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+        // ws = new WebSocket("ws://127.0.0.1:8000/ws"); // hard coded this
+        statusEl.textContent = "Status: connecting...";
+
+        ws.onopen = () => statusEl.textContent = "Status: connected";
+        ws.onclose = () => {
+            statusEl.textContent = "Status: disconnected";
+            document.getElementById("finished").style.display = "block";
+        }
+        ws.onerror = () => statusEl.textContent = "Status: error";
+
+        document.getElementById("timer").style.display = 'block';
+        starttimer();
+
+        session_id = null;
+
+        ws.onmessage = (ev) => {
+          const msg = JSON.parse(ev.data);
+
+          if (msg.type === "meta") {
+            fs = msg.fs;
+            nCh = msg.channels;
+            maxLen = seconds * fs;
+            buf_raw = []; // clear buffers
+            buf_env = [];
+            session_id = msg.session_id;
+            return;
+          }
+
+          if (msg.type === "data") {
+            for (const row of msg.raw) buf_raw.push(row[0]);
+            for (const row of msg.env) buf_env.push(row[0]);
+
+            if (buf_raw.length > maxLen) buf_raw = buf_raw.slice(-maxLen);
+            if (buf_env.length > maxLen) buf_env = buf_env.slice(-maxLen);
+
+            draw(buf_raw, ctx_raw, canvas_raw);
+            draw(buf_env, ctx_env, canvas_env);
+          }
+        };
+      }
+
+    </script>
+
+    </body>
+</html>
