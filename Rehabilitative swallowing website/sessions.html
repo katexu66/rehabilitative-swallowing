@@ -62,7 +62,11 @@
       async function refreshList() {
         const r = await fetch("/sessions");
         const { sessions } = await r.json();
-        sel.innerHTML = sessions.map(id => `<option value="${id}">${id}</option>`).join("");
+
+        sel.innerHTML = sessions.map(s => {
+          const text = s.label ? `${s.label} (${s.id})` : s.id;
+          return `<option value="${s.id}">${text}</option>`;
+        }).join("");
       }
 
       loadBtn.onclick = async () => {

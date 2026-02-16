@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime
 
 import numpy as np
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, HTTPException, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -102,7 +102,7 @@ async def ws(websocket: WebSocket):
         # client disconnected or server stop
         pass
 
-# options for saving/discarding data
+# options for data (saving, discarding, adding metadata)
 
 @app.post("/save/{session_id}")
 def save(session_id: str):
@@ -116,7 +116,14 @@ def discard(session_id: str):
     app.state.pending.pop(session_id, None)
     return {"ok": True}
 
+@app.post("/meta/{session_id}")
+def save_meta(session_id: str, meta: dict = Body(...)):
+    path = DATA_DIR / f"meta_{session_id}.json"
+    path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return {"ok": True}
+
 # previous sessions
+
 @app.get("/sessions")
 def list_sessions():
     # returns newest first
@@ -124,7 +131,12 @@ def list_sessions():
         [p.stem.replace("raw_", "") for p in DATA_DIR.glob("raw_*.npy")],
         reverse=True
     )
-    return {"sessions": ids}
+    out = []
+    for sid in ids: # testing metadata for sessions
+        mpath = DATA_DIR / f"meta_{sid}.json"
+        meta = json.loads(mpath.read_text()) if mpath.exists() else {}
+        out.append({"id": sid, "label": meta.get("label", ""), "notes": meta.get("notes", "")})
+    return {"sessions": out}
 
 @app.get("/session/{session_id}")
 def load_session(session_id: str, decim: int = 1):
