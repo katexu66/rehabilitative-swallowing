@@ -19,14 +19,13 @@
     <button id="btn-stopstream" class="button special">stop stream</button>
     <div id="timer" style="display: none">Stream started! Time elapsed: <span id="time"></span></div>
     <div id="finished" style="display: none">Session recorded! Time elapsed: <span id="finishedtime"></span>. Would you like to save this session?
-        <button id="save">yes</button> <button id="discard">no</button>
-        <div id="notesBox" style="display:none">
-          <input id="label" placeholder="exercise type..." />
-          <textarea id="notes" placeholder="notes..."></textarea>
-          <button id="saveMeta">save notes</button>
-        </div>
-    </div>
+        <button id="save">yes</button> <button id="discard">no</button></div>
     <div id="saveStatus" style="margin-top:6px; font-family: system-ui;"></div>
+    <div id="notesBox" class="notes-row" style="display:none">
+      <input id="label" placeholder="exercise type..." /><br>
+      <textarea id="notes" placeholder="notes..."></textarea><br>
+      <button id="saveMeta">save notes</button>
+    </div>
     <div id="notesStatus" style="margin-top:6px; font-family: system-ui;"></div>
     <hr>
 
@@ -155,7 +154,10 @@
         fetch(`/save/${session_id}`, { method: "POST" })
             .then(r => r.json())
             .then(res => {
-                if (res.ok) saveStatusEl.textContent = "Session saved to data folder!";
+                if (res.ok) {
+                  document.getElementById("finished").style.display = "none";
+                  saveStatusEl.textContent = "Session saved to data folder! Add optional notes about the session :)";
+                }
                 else saveStatusEl.textContent = "Save failed";
             });
 
@@ -169,8 +171,10 @@
         fetch(`/discard/${session_id}`, { method: "POST" })
             .then(r => r.json())
             .then(res => {
-                if (res.ok) saveStatusEl.textContent = "Session discarded";
+                if (res.ok) saveStatusEl.textContent = "Session successfully discarded";
                 else saveStatusEl.textContent = "Discard failed";
+                document.getElementById("finished").style.display = "none";
+                saveStatusEl.style.display = "block";
             });
 
         document.getElementById("save").disabled = true;
@@ -197,7 +201,8 @@
         // show res.ok somewhere in UI
 
         document.getElementById("notesBox").style.display = "none"; // hide save notes after saving
-        notesStatusEl.textContent = "Notes successfully saved!"
+        saveStatusEl.style.display = "none";
+        notesStatusEl.textContent = "Notes successfully saved!";
 
       };
 
