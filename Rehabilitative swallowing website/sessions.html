@@ -77,8 +77,8 @@
         // msg.raw and msg.env are [ [ch0,ch1,...], ... ] row-major
         const raw0 = msg.raw.map(row => row[0]); // channel 0
         const env0 = msg.env.map(row => row[0]);
-        draw(raw0, ctxRaw, canvasRaw);
-        draw(env0, ctxEnv, canvasEnv);
+        draw(raw0, ctx_raw, canvas_raw);
+        draw(env0, ctx_env, canvas_env);
       };
 
       refreshList();

@@ -6,7 +6,7 @@ import webbrowser
 def main():
     # start the server in the background
     p = subprocess.Popen([sys.executable, "-m", "uvicorn",
-                          "server_dummy:app",
+                          "server:app",
                           "--host", "127.0.0.1", "--port", "8000"],
                          stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
